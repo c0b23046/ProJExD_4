@@ -103,7 +103,7 @@ class Bird(pg.sprite.Sprite):
             self.image = self.imgs[self.dire]
 
         #無敵状態の処理
-        if self.state == "hyper":
+        if self.state == "hyper":  # 無敵モードなら
             self.hyper_life += -1
             self.image = pg.transform.laplacian(self.image)
             if self.hyper_life < 0:
@@ -334,7 +334,7 @@ def main():
         elif bird.state == "hyper":
             for bomb in pg.sprite.spritecollide(bird, bombs, True):
                 exps.add(Explosion(bomb, 50))  # 爆発エフェクト
-                score.value += 1  # 10点アップ
+                score.value += 1  # 10点アップgot 
 
 
         bird.update(key_lst, screen)
