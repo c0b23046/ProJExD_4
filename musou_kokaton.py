@@ -362,6 +362,7 @@ def main():
             """
             if event.type == pg.KEYDOWN and event.key == pg.K_g and score.value >= 200:
                 gravity.add(Gravity(400))
+                score.value -= 200
 
             # 無敵状態の処理
             if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
@@ -402,6 +403,13 @@ def main():
             return
         
         # 重力場が発生したとき
+        # すべてのUFOの削除を行う処理
+        for emy in pg.sprite.groupcollide(emys, gravity, True, False).keys():
+            exps.add(Explosion(emy, 100))  # 爆発エフェクト
+            score.value += 10  # 10点アップ
+            bird.change_img(6, screen)  # こうかとん喜びエフェクト
+
+        # すべての爆弾の削除を行う処理
         for bomb in pg.sprite.groupcollide(bombs, gravity, True, False).keys():
             exps.add(Explosion(bomb, 100))  # 爆発エフェクト
             score.value += 1  # 10点アップ
