@@ -47,6 +47,8 @@ class Bird(pg.sprite.Sprite):
         pg.K_LEFT: (-1, 0),
         pg.K_RIGHT: (+1, 0),
     }
+    state = "normal"
+    hyper_life = 0
 
     def __init__(self, num: int, xy: tuple[int, int]):
         """
@@ -99,6 +101,15 @@ class Bird(pg.sprite.Sprite):
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.dire = tuple(sum_mv)
             self.image = self.imgs[self.dire]
+
+        #無敵状態の処理
+        if self.state == "hyper":
+            self.hyper_life += -1
+            self.image = pg.transform.laplacian(self.image)
+            if self.hyper_life < 0:
+                self.state = "normal"
+                self.image = self.imgs[self.dire]
+
         screen.blit(self.image, self.rect)
 
 
@@ -264,8 +275,14 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
-            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-                beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN: 
+                if event.key == pg.K_SPACE:
+                    beams.add(Beam(bird))
+                if event.key == pg.K_RSHIFT and score.value >= 0:
+                    bird.state = "hyper"
+                    bird.hyper_life = 500
+                    score.value -= 100
+            
         screen.blit(bg_img, [0, 0])
 
         if tmr % 200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -285,12 +302,18 @@ def main():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.value += 1  # 1点アップ
 
-        if len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
+        if bird.state != "hyper" and len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
             bird.change_img(8, screen) # こうかとん悲しみエフェクト
             score.update(screen)
             pg.display.update()
             time.sleep(2)
             return
+        
+        elif bird.state == "hyper":
+            for bomb in pg.sprite.spritecollide(bird, bombs, True):
+                exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+                score.value += 1  # 10点アップ
+
 
         bird.update(key_lst, screen)
         beams.update()
