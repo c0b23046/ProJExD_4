@@ -48,6 +48,9 @@ class Bird(pg.sprite.Sprite):
         pg.K_RIGHT: (+1, 0),
     }
 
+    state = "normal"
+    hyper_life = 0
+
     def __init__(self, num: int, xy: tuple[int, int]):
         """
         こうかとん画像Surfaceを生成する
@@ -99,6 +102,15 @@ class Bird(pg.sprite.Sprite):
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.dire = tuple(sum_mv)
             self.image = self.imgs[self.dire]
+
+        # 無敵状態の処理
+        if self.state == "hyper":
+            self.hyper_life += -1
+            self.image = pg.transform.laplacian(self.image)
+            if self.hyper_life < 0:
+                self.state = "normal"
+                self.image = self.imgs[self.dire]
+
         screen.blit(self.image, self.rect)
 
 
@@ -141,14 +153,14 @@ class Beam(pg.sprite.Sprite):
     """
     ビームに関するクラス
     """
-    def __init__(self, bird: Bird):
+    def __init__(self, bird: Bird, angle0: float = 0):
         """
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん
         """
         super().__init__()
         self.vx, self.vy = bird.dire
-        angle = math.degrees(math.atan2(-self.vy, self.vx))
+        angle = math.degrees(math.atan2(-self.vy, self.vx)) + angle0
         self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), angle, 2.0)
         self.vx = math.cos(math.radians(angle))
         self.vy = -math.sin(math.radians(angle))
@@ -165,6 +177,27 @@ class Beam(pg.sprite.Sprite):
         self.rect.move_ip(self.speed*self.vx, self.speed*self.vy)
         if check_bound(self.rect) != (True, True):
             self.kill()
+
+
+class NeoBeam:
+    """
+    一度に複数方向へビームを発射する
+    """
+    def __init__(self, bird: Bird, num: int):
+        """
+        引数 bird ビームを放つこうかとん
+        引数　num　発射するビームの数
+        """
+        self.bird = bird
+        self.num = num
+    
+    def gen_beam(self) -> list[Beam]:
+        """
+        -50°～+51°の範囲で指定ビーム数の分だけBeamインスタンスを生成し，リストに追加する
+        戻り値：生成されたBeamインスタンスのリスト
+        """
+        step = 100 // (self.num -1)
+        return [Beam(self.bird, angle) for angle in range(-50, 51 ,step)]
 
 
 class Explosion(pg.sprite.Sprite):
@@ -242,6 +275,21 @@ class Score:
         screen.blit(self.image, self.rect)
 
 
+class Gravity(pg.sprite.Sprite):
+    def __init__(self,life):
+        super().__init__()
+        self.image = pg.Surface((WIDTH, HEIGHT))
+        pg.draw.rect(self.image,(0, 0, 0), (0, 0, WIDTH, HEIGHT))
+        self.life = life
+        self.rect = self.image.get_rect()
+        self.image.set_alpha(150)
+
+    def update(self):
+
+        self.life -= 1
+        if self.life < 1:
+            self.kill()
+
 
 class Shield(pg.sprite.Sprite):
     """
@@ -276,6 +324,7 @@ def main():
     score = Score()
 
     bird = Bird(3, (900, 400))
+    gravity = pg.sprite.Group()
     shield = pg.sprite.Group()
     bombs = pg.sprite.Group()
     beams = pg.sprite.Group()
@@ -289,18 +338,44 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
+            
+            # ビーム発射の処理
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-                beams.add(Beam(bird))
+                if pg.key.get_mods() & pg.KMOD_LSHIFT: # 左Shiftキーが押されている場合
+                    num_beams = 5  # 発射するビームの数を設定
+                    neo_beams = NeoBeam(bird, num_beams)
+                    beams.add(neo_beams.gen_beam())
+                else:
+                    beams.add(Beam(bird))
 
-            # なぜか俺のパソコンではcaps_lockキーだと反応しなかったので、キーをqに変更
+            # 高速移動をする処理
+            if event.type == pg.KEYDOWN and event.key == pg.K_LSHIFT:
+                bird.speed = 20
+            if event.type == pg.KEYUP and event.key == pg.K_LSHIFT:
+                bird.speed = 10
+
+            # 重力場を発生させる処理
+            """
+            本来は左シフトを押すと行われるが
+            あまりにも左シフトを利用した処理が多いため
+            キーをGに変更しました
+            """
+            if event.type == pg.KEYDOWN and event.key == pg.K_g and score.value >= 200:
+                gravity.add(Gravity(400))
+
+            # 無敵状態の処理
+            if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
+                bird.state = "hyper"
+                bird.hyper_life = 500
+                score.value -= 100
+
+            # 防護壁を出現させる処理
             if event.type == pg.KEYDOWN and event.key == pg.K_q and len(shield) == 0:
                 if score.value >= 50:
                     shield.add(Shield(bird, 400))
                     score.value -= 50
 
         screen.blit(bg_img, [0, 0])
-
-
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
             emys.add(Enemy())
@@ -319,24 +394,30 @@ def main():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.value += 1  # 1点アップ
 
-        # 爆弾が防護壁に当たった時
-        for bomb in pg.sprite.groupcollide(bombs, shield, True, False).keys():
-            exps.add(Explosion(bomb, 50))  # 爆発エフェクトを描画して該当する爆弾を削除
-
-        if len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
+        if bird.state != "hyper" and len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
             bird.change_img(8, screen) # こうかとん悲しみエフェクト
             score.update(screen)
             pg.display.update()
             time.sleep(2)
             return
+        
+        # 重力場が発生したとき
+        for bomb in pg.sprite.groupcollide(bombs, gravity, True, False).keys():
+            exps.add(Explosion(bomb, 100))  # 爆発エフェクト
+            score.value += 1  # 10点アップ
+            bird.change_img(6, screen)  # こうかとん喜びエフェクト
+        
+        # 無敵状態のとき
+        if bird.state == "hyper":
+            for bomb in pg.sprite.spritecollide(bird, bombs, True):
+                exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+                score.value += 1  # 10点アップ
 
+        # 爆弾が防護壁に当たった時
+        for bomb in pg.sprite.groupcollide(bombs, shield, True, False).keys():
+            exps.add(Explosion(bomb, 50))  # 爆発エフェクトを描画して該当する爆弾を削除
 
         bird.update(key_lst, screen)
-        
-        # 防護壁の更新と描画
-        shield.update()
-        shield.draw(screen)
-
         beams.update()
         beams.draw(screen)
         emys.update()
@@ -346,6 +427,12 @@ def main():
         exps.update()
         exps.draw(screen)
         score.update(screen)
+        # 重力場実行の描画
+        gravity.update()
+        gravity.draw(screen)
+        # 防護壁の更新と描画
+        shield.update()
+        shield.draw(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
