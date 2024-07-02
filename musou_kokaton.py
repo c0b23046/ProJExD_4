@@ -5,7 +5,6 @@ import sys
 import time
 import pygame as pg
 
-
 WIDTH = 1200  # ゲームウィンドウの幅
 HEIGHT = 850  # ゲームウィンドウの高さ
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -72,6 +71,7 @@ class Bird(pg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = xy
         self.speed = 10
+
 
     def change_img(self, num: int, screen: pg.Surface):
         """
@@ -263,6 +263,10 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_LSHIFT:
+                bird.speed = 20
+            if event.type == pg.KEYUP and event.key == pg.K_LSHIFT:
+                bird.speed = 10
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
